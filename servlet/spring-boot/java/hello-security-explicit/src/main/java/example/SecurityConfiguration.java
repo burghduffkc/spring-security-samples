@@ -16,6 +16,9 @@
 
 package example;
 
+import org.apache.tomcat.util.http.Rfc6265CookieProcessor;
+import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,6 +27,9 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+
+import java.util.regex.Pattern;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -39,7 +45,13 @@ public class SecurityConfiguration {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		// @formatter:off
-		http
+		http.csrf((httpSecurityCsrfConfigurer -> {
+			   //START Bug change
+				httpSecurityCsrfConfigurer
+						.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+						.ignoringRequestMatchers(request -> Pattern.compile("^(GET)$").matcher(request.getMethod()).matches());
+				}))
+				//END Bug change
 				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().authenticated()
 				)
@@ -47,6 +59,15 @@ public class SecurityConfiguration {
 				.formLogin(withDefaults());
 		// @formatter:on
 		return http.build();
+	}
+	// Add cookie processor for tomcat, can also be done in a context.xml file
+	@Bean
+	WebServerFactoryCustomizer<TomcatServletWebServerFactory> servletWebServerFactoryWebServerFactoryCustomizer(){
+		return container -> container.addContextCustomizers(context -> {
+			Rfc6265CookieProcessor rfc = new Rfc6265CookieProcessor();
+			rfc.setSameSiteCookies("STRICT");
+			context.setCookieProcessor(rfc);
+		});
 	}
 
 	// @formatter:off
